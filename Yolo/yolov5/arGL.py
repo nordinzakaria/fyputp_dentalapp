@@ -61,7 +61,7 @@ dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=True)
 dataiter = iter(dataset)
 path, img, im0s, vid_cap, s = next(dataset)
 new_frame = im0s[0]
-
+WWIDTH, WHEIGHT = 640, 480
 frameindex = 0
 
 toolcolor = {
@@ -70,9 +70,11 @@ toolcolor = {
 
 toolspots = []
 
+toothboxes = []
+
 class BBox:
     ID = 0
-    def __init__(self, x,y,w,h):
+    def __init__(self, x,y,w,h, bid=None):
         self.x = x
         self.y = y
         self.w = w
@@ -80,8 +82,9 @@ class BBox:
         self.x2 = x + w
         self.y2 = y + h
         self.consumed = False
-        self.id = BBox.ID
-        BBox.ID += 1
+        if bid == None:
+            self.id = BBox.ID
+            BBox.ID += 1
 
     def consume(self, ctr2):
         if self.x < ctr2.x and self.x2 < ctr2.x2:   # entirely left
@@ -214,10 +217,33 @@ def draw_gl_scene():
     glEnd()
 
 
+    glColor3f(0,1,0)
+    glBegin(GL_QUADS)
+    for tooth in toothboxes:
+        x0 = tooth.x * 8 - 4
+        y0 = (1-tooth.y) * 6 - 3
+        x1 = tooth.x2 * 8 - 4
+        y1 = (1-tooth.y2) * 6 - 3
+        glVertex3f(x0, y0, 0.1)
+        glVertex3f(x1, y0, 0.1)
+        glVertex3f(x1, y1, 0.1)
+        glVertex3f(x0, y1, 0.1)
+
+    glEnd()
+
+    transx, transy = 0, 0
+    wcenX = WWIDTH / 2.0
+    wcenY = WHEIGHT / 2.0
+    if len(toolspots) > 0:
+        spot = toolspots[0]
+        transx = (spot.x - wcenX) / wcenX * 5  
+        transy = (spot.y - wcenY) / wcenY * 5  
+
+
 
     glPopMatrix()
     glPushMatrix()
-    glTranslatef(0.0, 0.0, -6.0)
+    glTranslatef(transx, transy, -6.0)
     glRotatef(X_AXIS, 1.0, 0.0, 0.0)
     glRotatef(Y_AXIS, 0.0, 1.0, 0.0)
     glRotatef(Z_AXIS, 0.0, 0.0, 1.0)
@@ -336,12 +362,6 @@ def detectTool(image):
             newlist.append(ctr)
         toolspots = newlist
 
-    print("After merging.. ")
-    for ctr in toolspots:
-        ctr.print()
-
-
-
 
 
 def cvyolo(img):
@@ -362,12 +382,14 @@ def cvyolo(img):
     # NMS
     pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
 
+    global toothboxes
+    toothboxes.clear()
+
     # Process predictions
     for i, det in enumerate(pred):  # per image
         p, im0, frame = path[i], im0s[i].copy(), dataset.count
         gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
 
-        resultboxes = []
         if len(det):
             # Rescale boxes from img_size to im0 size
             det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
@@ -379,7 +401,7 @@ def cvyolo(img):
 
                 # line is a tuple containing the results
                 print('has the following ', line)                 
-                resultboxes.append(line)
+                toothboxes.append(BBox(line[1], line[2], line[3], line[4], str(line[0])))
 
 
 def initcv(imgsz, weights):

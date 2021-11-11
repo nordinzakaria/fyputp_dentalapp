@@ -208,6 +208,8 @@ def run_detect(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
 
+
+        breakpoint()
         # Process predictions
         for i, det in enumerate(pred):  # per image
             seen += 1
