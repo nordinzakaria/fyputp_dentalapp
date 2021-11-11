@@ -60,7 +60,7 @@ stride = 64
 dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=True)
 dataiter = iter(dataset)
 path, img, im0s, vid_cap, s = next(dataset)
-new_frame = img
+new_frame = im0s[0]
 
 '''
 def init():
@@ -109,8 +109,10 @@ def draw_gl_scene():
 
     global path, img, im0s
     path, img, im0s, vid_cap, s = next(dataset)
-    new_frame = img
-    #cvyolo(frame)
+    new_frame = im0s[0]
+
+    cvyolo(img)
+
 
     # convert image to OpenGL texture format
     tx_image = cv2.flip(frame, 0)
@@ -199,15 +201,6 @@ def key_pressed(key, x, y):
 
 
 def cvyolo(img):
-    breakpoint()
-
-    # Stack
-    img = np.stack(img, 0)
-
-    # Convert
-    img = img[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW
-    img = np.ascontiguousarray(img)
-
     global dataset
     img = torch.from_numpy(img).to(device)
     img = img.float()  # uint8 to fp16/32
@@ -238,7 +231,7 @@ def cvyolo(img):
             # Write results
             for *xyxy, conf, cls in reversed(det):
                 xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
+                line = (cls, *xywh, conf)  # label format
 
                 # line is a tuple containing the results
                 print('has the following ', line)                 

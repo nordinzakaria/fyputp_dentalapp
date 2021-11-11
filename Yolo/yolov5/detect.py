@@ -149,8 +149,6 @@ def run_detect(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     dt, seen = [0.0, 0.0, 0.0], 0
     for path, img, im0s, vid_cap, s in dataset:
 
-        breakpoint()
-
         t1 = time_sync()
         if onnx:
             img = img.astype('float32')
