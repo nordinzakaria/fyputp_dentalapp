@@ -62,11 +62,79 @@ dataiter = iter(dataset)
 path, img, im0s, vid_cap, s = next(dataset)
 new_frame = im0s[0]
 
-'''
-def init():
-    video_thread = Thread(target=update, args=())
-    video_thread.start()
-'''
+frameindex = 0
+
+toolcolor = {
+        "ToolA": ([80, 60, 125], [95, 85, 140])
+        }
+
+toolspots = []
+
+class BBox:
+    ID = 0
+    def __init__(self, x,y,w,h):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.x2 = x + w
+        self.y2 = y + h
+        self.consumed = False
+        self.id = BBox.ID
+        BBox.ID += 1
+
+    def consume(self, ctr2):
+        if self.x < ctr2.x and self.x2 < ctr2.x2:   # entirely left
+            self.w = ctr2.x2 - self.x
+        elif ctr2.x < self.x and ctr2.x2 < self.x2: # entirely right
+            self.w = self.x2 - ctr2.x
+            self.setX(ctr2.x)
+        elif ctr2.x < self.x and ctr2.x2 > self.x2: # engulfed by ctr2
+            self.w = ctr2.w
+            self.setX(ctr2.x)
+
+        if self.y < ctr2.y and self.y2 < ctr2.y2:   # entirely lower
+            self.h = ctr2.y2 - self.y
+        elif ctr2.y < self.y and ctr2.y2 < self.y2: # entirely higher
+            self.h = self.y2 - ctr2.y
+            self.setY(ctr2.y)
+        elif ctr2.y < self.y and ctr2.y2 > self.y2: # engulfed by ctr2
+            self.h = ctr2.h
+            self.setY(ctr2.y)
+
+
+        ctr2.consumed = True
+
+    def setX(self, x):
+        self.x = x
+        self.x2 = x + self.w
+
+    def setY(self, y):
+        self.y = y
+        self.y2 = y + self.h
+
+    def print(self):
+        print("Box ", self.id, " has [", self.x, ",", self.y, ",", self.w, ",", self.h, "]")
+
+
+    def isNear(self, ctr2):
+        center = np.array((0,0))
+        center[0] = (self.x + self.x2) / 2
+        center[1] = (self.y + self.y2) / 2
+
+        center2 = np.array((0,0))
+        center2[0] = (ctr2.x + ctr2.x2) / 2
+        center2[1] = (ctr2.y + ctr2.y2) / 2
+
+        dist = np.linalg.norm(center - center2)
+        if dist < 100:
+            return True
+
+        return False
+
+
+
+
 
 def init_gl(width, height):
     global texture_id
@@ -112,7 +180,12 @@ def draw_gl_scene():
     new_frame = im0s[0]
 
     cvyolo(img)
-
+    detectTool(frame)
+    '''
+    global frameindex
+    cv2.imwrite("lihat-"+str(frameindex)+".jpg", frame)
+    frameindex += 1
+    '''
 
     # convert image to OpenGL texture format
     tx_image = cv2.flip(frame, 0)
@@ -139,12 +212,16 @@ def draw_gl_scene():
     glTexCoord2f(0.0, 0.0)
     glVertex3f(-4.0, 3.0, 0.0)
     glEnd()
+
+
+
     glPopMatrix()
     glPushMatrix()
     glTranslatef(0.0, 0.0, -6.0)
     glRotatef(X_AXIS, 1.0, 0.0, 0.0)
     glRotatef(Y_AXIS, 0.0, 1.0, 0.0)
     glRotatef(Z_AXIS, 0.0, 0.0, 1.0)
+    glScalef(0.3, 0.3, 0.3)
 
     glBegin(GL_QUADS)
 
@@ -199,6 +276,73 @@ def key_pressed(key, x, y):
         thread_quit = 1
         sys.exit()
 
+def detectTool(image):
+    global toolspots
+    toolspots.clear()
+
+    for tool in toolcolor.keys():
+        (lower, upper) = toolcolor[tool]
+            # create NumPy arrays from the boundaries
+        lower = np.array(lower, dtype = "uint8")
+        upper = np.array(upper, dtype = "uint8")
+        # find the colors within the specified boundaries and apply
+        # the mask
+        mask = cv2.inRange(image, lower, upper)
+        output = cv2.bitwise_and(image, image, mask = mask)
+
+        output = cv2.medianBlur(output, 5)
+        kernel = np.ones((5,5),np.uint8)
+        cv2.dilate(output,kernel,iterations = 1)
+
+
+        gray=cv2.cvtColor(output,cv2.COLOR_BGR2GRAY)
+        contours, hierarchy = cv2.findContours(gray, cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)[-2:]
+
+        # collect contours into a list
+        for cnt in contours:
+            x,y,w,h = cv2.boundingRect(cnt)
+            if w < 5 or h < 5:
+                continue
+            result = BBox(x,y,w,h)
+            result.print()
+            toolspots.append(result)
+
+    while True: # repeat for as long as some merge is possible
+        hasMerge = False
+
+        for ctr in toolspots:   # N^2 loop
+            if ctr.consumed == True:
+                continue
+
+            for ctr2 in toolspots:
+                if ctr.id == ctr2.id:
+                    continue
+
+                if ctr.consumed == True:
+                    continue
+
+                near = ctr.isNear(ctr2)
+                if near == True:
+                    ctr.consume(ctr2)
+                    hasMerge = True
+
+        if hasMerge == False:
+            break
+
+        newlist = []    
+        for ctr in toolspots:
+            if ctr.consumed == True:
+                continue
+            newlist.append(ctr)
+        toolspots = newlist
+
+    print("After merging.. ")
+    for ctr in toolspots:
+        ctr.print()
+
+
+
+
 
 def cvyolo(img):
     global dataset
@@ -236,7 +380,6 @@ def cvyolo(img):
                 # line is a tuple containing the results
                 print('has the following ', line)                 
                 resultboxes.append(line)
-
 
 
 def initcv(imgsz, weights):
