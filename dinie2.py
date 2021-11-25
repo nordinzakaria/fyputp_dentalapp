@@ -24,7 +24,8 @@ from tkinter import ttk
 
 
 class MyVideoCapture:
-    def __init__(self, frame_source='./Dental_frame/images/', label_source='./Dental_frame/annotations/', prefix='dentalframe', suffix='.jpg', startframe=0):
+    #def __init__(self, frame_source='./Dental_project/images/', label_source='./Dental_project/annotations/', prefix='dentalframe', suffix='.jpg', startframe=0):
+    def __init__(self, frame_source='./Dental/Train/images/', label_source='./Dental/Train/labels/', prefix='Frame_', suffix='.JPG', startframe=150):
         self.framefolder = frame_source
         self.labelfolder = label_source
         self.prefix = prefix
@@ -106,10 +107,18 @@ class VideoWindow(tk.Toplevel):
 
                 for ind in df.index:
                     classlabel = int(df.at[ind, 0])
-                    xmin = int(df.at[ind, 1] * self.vid.width)
-                    ymin = int(df.at[ind, 2] * self.vid.height)
-                    xmax = int(df.at[ind, 3] * self.vid.width) + xmin
-                    ymax = int(df.at[ind, 4] * self.vid.height) + ymin
+
+                    xcen = int(df.at[ind, 1] * self.vid.width)
+                    ycen = int(df.at[ind, 2] * self.vid.height)
+
+                    bwidth = int(df.at[ind, 3] * self.vid.width) 
+                    bhgt = int(df.at[ind, 4] * self.vid.height)
+
+                    xmin = xcen - bwidth//2
+                    xmax = xcen + bwidth//2
+                    ymin = ycen - bhgt//2
+                    ymax = ycen + bhgt//2
+
                     frame = cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (255,0,0), 2)
 
                     bboxes.append((classlabel, xmin, ymin, xmax, ymax))
